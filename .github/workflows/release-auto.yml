@@ -1,0 +1,74 @@
+name: Release Automática Sem Versão Manual
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Necessário para pegar todas as tags
+
+      - name: Configurar git
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+
+      - name: Buscar última tag
+        id: get_latest_tag
+        run: |
+          # Pega a última tag ordenada semanticamente
+          LATEST_TAG=$(git tag --sort=-v:refname | head -n 1)
+          echo "Última tag: $LATEST_TAG"
+
+          if [ -z "$LATEST_TAG" ]; then
+            # Se não existe nenhuma tag, usa v0.0.0
+            echo "Nenhuma tag encontrada. Usando v0.0.0"
+            echo "tag=v0.0.0" >> $GITHUB_OUTPUT
+          else
+            echo "tag=$LATEST_TAG" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Incrementar patch da tag
+        id: increment_tag
+        run: |
+          TAG=${{ steps.get_latest_tag.outputs.tag }}
+          echo "Tag atual: $TAG"
+
+          # Remove o "v" no começo
+          VERSION="${TAG#v}"
+
+          # Divide a versão em partes
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION"
+
+          # Incrementa o patch
+          PATCH=$((PATCH + 1))
+
+          # Nova tag
+          NEW_TAG="v${MAJOR}.${MINOR}.${PATCH}"
+
+          echo "Nova tag: $NEW_TAG"
+          echo "new_tag=$NEW_TAG" >> $GITHUB_OUTPUT
+
+      - name: Criar tag git e push
+        run: |
+          git tag ${{ steps.increment_tag.outputs.new_tag }}
+          git push origin ${{ steps.increment_tag.outputs.new_tag }}
+
+      - name: Criar release no GitHub
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.increment_tag.outputs.new_tag }}
+          name: "Release ${{ steps.increment_tag.outputs.new_tag }}"
+          body: "Release automática gerada pelo workflow"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
