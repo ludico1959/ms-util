@@ -1,4 +1,4 @@
-name: Gerar Release Automática
+name: Generate Automatic Release
 
 on:
   push:
@@ -11,9 +11,10 @@ permissions:
 jobs:
   gerar_release:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout do código
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Ler versão do build.gradle
         id: tag
@@ -21,14 +22,19 @@ jobs:
           VERSION=$(grep '^version =' build.gradle | sed "s/version = ['\"]\(.*\)['\"]/\\1/")
           echo "tag=v$VERSION" >> $GITHUB_OUTPUT
 
-      - name: Mostrar tag criada
+      - name: Criar tag no Git
         run: |
-          echo "Tag gerada: ${{ steps.tag.outputs.tag }}"
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git tag ${{ steps.tag.outputs.tag }}
+          git push origin ${{ steps.tag.outputs.tag }}
 
-      - name: Criar release
+      - name: Criar release no GitHub
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.tag.outputs.tag }}
           name: "Release ${{ steps.tag.outputs.tag }}"
+          body: |
+            Release automática gerada após merge no main.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
